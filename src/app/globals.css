@@ -1,26 +1,162 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* The container representing the boutique table */
+.book-stage {
+  background: radial-gradient(circle, #faf9f6 0%, #e2d1c3 100%);
+  padding: 50px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+/* The physical book container */
+.bridal-book {
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
+}
+
+.page-content {
+  background-color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+
+/* The "Spine" Crease Effect */
+/* This adds a subtle gradient near the binding for realism */
+.page-gradient {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40px;
+  pointer-events: none;
+}
+
+/* Left-hand pages have the shadow on the right side */
+.stf__item.-left .page-gradient {
+  right: 0;
+  background: linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0,0.05));
+}
+
+/* Right-hand pages have the shadow on the left side */
+.stf__item.-right .page-gradient {
+  left: 0;
+  background: linear-gradient(to left, rgba(0,0,0,0), rgba(0,0,0,0.05));
+}
+
+/* Make the cover feel thicker */
+.stf__item:first-child, .stf__item:last-child {
+  border-radius: 0 4px 4px 0;
+  border-left: 2px solid rgba(0,0,0,0.05);
+}
+
+
+
+/* Fix for react-pdf canvas rendering */
+.react-pdf__Page__canvas {
+  width: 100% !important;
+  height: auto !important;
+  display: block;
+}
+
+/* Ensure the flipbook has room to breathe */
+.bridal-book {
+  margin: 0 auto;
+}
+
+/* 1. The "Tabletop" Background */
+body {
+  background: radial-gradient(circle at center, #ffffff 0%, #e8e2da 100%);
+}
+
+/* 2. The Page Container */
+.page-container {
+  background-color: #fff;
+  /* Add a very faint paper texture */
+  background-image: url("https://www.transparenttextures.com/patterns/natural-paper.png");
+}
+
+/* 3. The Center Spine (The "Gutter") */
+/* This makes the book look like it has a real binding */
+.spine-shadow {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Right-hand side of the gutter */
+.stf__item.-right .spine-shadow {
+  left: 0;
+  background: linear-gradient(to right, 
+    rgba(0,0,0,0.12) 0%, 
+    rgba(0,0,0,0.05) 15%, 
+    transparent 100%);
+}
+
+/* Left-hand side of the gutter */
+.stf__item.-left .spine-shadow {
+  right: 0;
+  background: linear-gradient(to left, 
+    rgba(0,0,0,0.12) 0%, 
+    rgba(0,0,0,0.05) 15%, 
+    transparent 100%);
+}
+
+/* 4. The Paper Sheen */
+/* This adds a soft white highlight to the outer edges */
+.paper-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(135deg, 
+    rgba(255,255,255,0.2) 0%, 
+    transparent 50%, 
+    rgba(0,0,0,0.02) 100%);
+  z-index: 11;
+}
+
+/* 5. The Page Turn Shadow (Customizing the library's shadow) */
+.stf__shadow {
+  background-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+/* 6. Realistic Page Edges */
+/* This creates a "stack of paper" effect on the side */
+.bridal-book {
+  border-right: 1px solid rgba(0,0,0,0.05);
+  border-bottom: 2px solid rgba(0,0,0,0.1);
+}
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg-color: #f4f1ee; /* Luxury warm parchment */
+  --text-main: #1c1917;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  overflow-x: hidden;
+}
+
+/* Fix for the PDF Canvas to make it look like high-end print */
+.react-pdf__Page__canvas {
+  margin: 0 auto !important;
+  max-width: 100% !important;
+  height: auto !important;
+  filter: contrast(1.02) brightness(1.02); /* Makes the white of the PDF pop */
+}
+
+/* Custom shadow for the book engine */
+.stf__parent {
+  box-shadow: 0 50px 100px -20px rgba(0,0,0,0.2);
 }

@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { pdfjs, Document, Page } from 'react-pdf';
-import PageFlip from 'react-pageflip';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { pdfjs, Document, Page } from "react-pdf";
+import PageFlip from "react-pageflip";
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url,
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url
 ).toString();
 
 export default function BridalBook() {
@@ -14,6 +14,13 @@ export default function BridalBook() {
   const [dims, setDims] = useState({ w: 0, h: 0 });
   const [isMobile, setIsMobile] = useState(false);
 
+  const bookRef = useRef<any>(null);
+
+  // keep in sync with flippingTime
+  const FLIP_MS = 1000;
+  const SHADOW_PAD = 80; // space for the bottom shadow (tweak 60–120)
+
+  // cache-busting once per mount
   const pdfFile = useMemo(() => `/taob-site.pdf?v=${Date.now()}`, []);
 
   useEffect(() => {
@@ -23,21 +30,18 @@ export default function BridalBook() {
       const mobile = vw < 1024;
       setIsMobile(mobile);
 
-      let w, h;
+      let w: number, h: number;
+
       if (mobile) {
-        // Pushes away from mobile edges by taking parent padding into account
-        w = Math.min(vw - 64, 600); 
+        w = vw - 48;
         h = w * 1.414;
       } else {
-        // Desktop: High-impact scale
-        // Uses a 1.414 (A4) aspect ratio for the spread
-        w = Math.min(vw * 0.85, 1600); 
-        h = (w / 2) * 1.414;
+        h = vh * 0.9;
+        w = (h / 1.414) * 2;
 
-        // If it's too tall for the laptop screen, scale it down slightly
-        if (h > vh * 0.85) {
-          h = vh * 0.85;
-          w = (h / 1.414) * 2;
+        if (w > vw * 0.85) {
+          w = vw * 0.85;
+          h = (w / 2) * 1.414;
         }
       }
 
@@ -45,73 +49,223 @@ export default function BridalBook() {
     };
 
     handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize, { passive: true });
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  /**
+   * BULLETPROOF SCROLL GUARD
+   * - blocks user scroll input
+   * - blocks browser "nudges" by forcing scrollY back every frame during flip
+   */
+  const guardRef = useRef<{
+    active: boolean;
+    lockedY: number;
+    raf: number | null;
+    timer: number | null;
+    cleanup: (() => void) | null;
+  }>({ active: false, lockedY: 0, raf: null, timer: null, cleanup: null });
+
+  const stopGuard = useCallback(() => {
+    const g = guardRef.current;
+    if (!g.active) return;
+
+    g.active = false;
+
+    if (g.raf) cancelAnimationFrame(g.raf);
+    if (g.timer) window.clearTimeout(g.timer);
+    if (g.cleanup) g.cleanup();
+
+    g.raf = null;
+    g.timer = null;
+    g.cleanup = null;
+  }, []);
+
+  const startGuard = useCallback((durationMs: number) => {
+    const g = guardRef.current;
+
+    // restart cleanly if spammed
+    stopGuard();
+
+    g.active = true;
+    g.lockedY = window.scrollY;
+
+    // Prevent *input* scroll (wheel, touch, keys)
+    const prevent = (e: Event) => {
+      e.preventDefault();
+    };
+
+    const preventKeys = (e: KeyboardEvent) => {
+      // block keys that scroll the page
+      const keys = [
+        "ArrowUp",
+        "ArrowDown",
+        "PageUp",
+        "PageDown",
+        "Home",
+        "End",
+        " ",
+      ];
+      if (keys.includes(e.key)) e.preventDefault();
+    };
+
+    // NOTE: must be non-passive to preventDefault
+    window.addEventListener("wheel", prevent, { passive: false });
+    window.addEventListener("touchmove", prevent, { passive: false });
+    window.addEventListener("keydown", preventKeys, { passive: false });
+
+    // Stop scroll anchoring / overscroll bounce while flipping
+    const html = document.documentElement;
+    const prevOverscroll = html.style.overscrollBehaviorY;
+    const prevOverflowAnchor = (document.body.style as any).overflowAnchor;
+
+    html.style.overscrollBehaviorY = "none";
+    (document.body.style as any).overflowAnchor = "none";
+
+    g.cleanup = () => {
+      window.removeEventListener("wheel", prevent as any);
+      window.removeEventListener("touchmove", prevent as any);
+      window.removeEventListener("keydown", preventKeys as any);
+      html.style.overscrollBehaviorY = prevOverscroll;
+      (document.body.style as any).overflowAnchor = prevOverflowAnchor;
+    };
+
+    // Hard-enforce scroll position every frame
+    const tick = () => {
+      if (!g.active) return;
+
+      // If anything nudged us, snap back immediately.
+      if (window.scrollY !== g.lockedY) {
+        window.scrollTo({ top: g.lockedY, left: 0, behavior: "auto" });
+      }
+
+      g.raf = requestAnimationFrame(tick);
+    };
+
+    g.raf = requestAnimationFrame(tick);
+
+    // Auto-release after duration
+    g.timer = window.setTimeout(() => {
+      stopGuard();
+    }, Math.max(0, durationMs));
+  }, [stopGuard]);
+
+  useEffect(() => {
+    return () => {
+      stopGuard();
+    };
+  }, [stopGuard]);
+
+  // PageFlip event: treat as "flip is happening now"
+  const onFlip = useCallback(() => {
+    // Guard the entire flip window + a little extra buffer for late layout/focus nudges
+    startGuard(FLIP_MS + 250);
+  }, [startGuard]);
 
   if (dims.h === 0) return null;
 
-  return (
-    <div className="flex flex-col items-center justify-center w-full transition-all duration-700">
-      <div className="relative bg-white shadow-[0_50px_100px_-30px_rgba(0,0,0,0.12)]">
-        <Document 
-          file={pdfFile} 
-          onLoadSuccess={({ numPages }) => setNumPages(numPages)}
-          loading={<div className="font-serif italic text-stone-300 py-40 tracking-[0.3em] text-sm animate-pulse">Unveiling the Portfolio</div>}
-        >
-          {numPages && (
-            /* @ts-ignore */
-            <PageFlip
-              width={isMobile ? Math.floor(dims.w) : Math.floor(dims.w / 2)}
-              height={Math.floor(dims.h)}
-              size="fixed"
-              showCover={true}
-              usePortrait={isMobile}
-              flippingTime={1200}
-              maxShadowOpacity={0.1}
-              className="luxe-book"
-              drawShadow={true}
-              style={{ backgroundColor: "white" }}
-            >
-              {[...Array(numPages).keys()].map((p) => (
-                <div key={p} className="bg-white overflow-hidden border-none outline-none">
-                  <div className="relative bg-white w-full h-full">
-                    <Page 
-                      pageNumber={p + 1} 
-                      height={dims.h}
-                      width={isMobile ? dims.w : dims.w / 2}
-                      renderAnnotationLayer={false}
-                      renderTextLayer={false}
-                      devicePixelRatio={Math.min(window.devicePixelRatio, 2)}
-                      className="bg-white block"
-                    />
-                    
-                    {/* Spine Shadow */}
-                    {!isMobile && (
-                      <div className={`absolute inset-y-0 ${p % 2 === 0 ? 'right-0 bg-gradient-to-l' : 'left-0 bg-gradient-to-r'} from-black/[0.04] to-transparent w-24 pointer-events-none z-10`} />
-                    )}
-                  </div>
-                </div>
-              ))}
-            </PageFlip>
-          )}
-        </Document>
-      </div>
+  const flipWidth = isMobile ? Math.floor(dims.w) : Math.floor(dims.w / 2);
+  const flipHeight = Math.floor(dims.h);
 
-      <style jsx global>{`
-        /* Remove any default canvas borders and force white background */
-        .react-pdf__Page__canvas {
-          background-color: white !important;
-          display: block !important;
-          margin: 0 auto;
-        }
-        .stf__parent {
-          background: transparent !important;
-        }
-        .luxe-book {
-           background-color: white;
-        }
-      `}</style>
+  return (
+    <div className="w-full flex justify-center">
+    <div
+      className="w-full flex items-center justify-center"
+      style={{
+        // give the shadow room to exist (prevents “clipped panel” look)
+        height: flipHeight + SHADOW_PAD,
+        paddingBottom: SHADOW_PAD,
+
+        // IMPORTANT: allow shadows to spill
+        overflow: "visible",
+
+        // keep scroll anchoring disabled (fine)
+        overflowAnchor: "none",
+
+        // IMPORTANT: do NOT paint-contain (it clips shadows)
+        // contain: "layout paint size",
+        contain: "layout size", // or just delete this line entirely
+      }}
+    >
+        <div className="relative bg-white shadow-[0_80px_120px_-40px_rgba(0,0,0,0.08)]">
+          <Document
+            file={pdfFile}
+            onLoadSuccess={({ numPages }) => setNumPages(numPages)}
+            loading={
+              <div className="font-serif italic text-stone-300 py-48 tracking-[0.4em] text-xs">
+                Unveiling Portfolio
+              </div>
+            }
+          >
+            {numPages && (
+              /* @ts-ignore */
+              <PageFlip
+                ref={bookRef}
+                width={flipWidth}
+                height={flipHeight}
+                size="fixed"
+                showCover={true}
+                usePortrait={isMobile}
+                flippingTime={FLIP_MS}
+                maxShadowOpacity={0.12}
+                className="luxe-flip-engine"
+                drawShadow={true}
+                clickEventForward={false}
+                useMouseEvents={true}
+                swipeDistance={30}
+                style={{ backgroundColor: "#ffffff" }}
+                onFlip={onFlip}
+              >
+                {[...Array(numPages).keys()].map((p) => (
+                  <div key={p} className="bg-white overflow-hidden" tabIndex={-1}>
+                    <div className="relative bg-white w-full h-full">
+                      <Page
+                        pageNumber={p + 1}
+                        height={flipHeight}
+                        width={isMobile ? dims.w : dims.w / 2}
+                        renderAnnotationLayer={false}
+                        renderTextLayer={false}
+                        devicePixelRatio={Math.min(window.devicePixelRatio, 2)}
+                        className="bg-white"
+                        loading={null}
+                      />
+
+                      {!isMobile && (
+                        <div
+                          className={`absolute inset-y-0 ${
+                            p % 2 === 0 ? "right-0 bg-gradient-to-l" : "left-0 bg-gradient-to-r"
+                          } from-black/[0.04] to-transparent w-24 pointer-events-none z-10`}
+                        />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </PageFlip>
+            )}
+          </Document>
+        </div>
+
+        <style jsx global>{`
+          html,
+          body {
+            overflow-anchor: none;
+          }
+
+          .luxe-flip-engine {
+            outline: none !important;
+            -webkit-tap-highlight-color: transparent;
+          }
+
+          .luxe-flip-engine *:focus {
+            outline: none !important;
+          }
+
+          .react-pdf__Page__canvas {
+            background-color: white !important;
+            display: block !important;
+          }
+        `}</style>
+      </div>
     </div>
   );
 }

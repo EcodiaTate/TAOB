@@ -16,7 +16,7 @@ const inter = Inter({
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${playfair.variable} ${inter.variable}`}>
-      <body className="antialiased bg-[#fcfbf9] text-stone-900 overflow-x-hidden">
+      <body className="antialiased mt-5 pt-5 bg-[#fcfbf9] text-stone-900 overflow-x-hidden">
         {children}
       </body>
     </html>

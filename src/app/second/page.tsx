@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 
-const BridalBook = dynamic(() => import("../components/BridalBook"), {
+const BridalBook = dynamic(() => import("@/components/BridalBook"), {
   ssr: false,
   loading: () => (
     <div className="h-[80vh] w-full flex items-center justify-center font-serif italic text-stone-300 tracking-[0.3em] uppercase text-xs">
@@ -23,7 +23,7 @@ export default function Home() {
   if (!mounted) return null;
 
   return (
-    <main className="min-h-screen mt-5 w-full flex flex-col items-center bg-[#fcfbf9]">
+    <main className="min-h-screen w-full flex flex-col items-center bg-[#fcfbf9]">
       {/* TOP NAV CTA */}
       <div className="w-full max-w-screen-2xl px-8 md:px-24 pt-10 flex justify-center">
        
@@ -32,7 +32,7 @@ export default function Home() {
       {/* 1. HERO HEADER */}
       <header className="w-full max-w-screen-2xl pt-[12vh] pb-[10vh] px-8 md:px-24 flex flex-col items-center text-center space-y-12">
       <Link
-          href="/second"
+          href="/third"
           className="group inline-flex items-center gap-3 border border-stone-300 px-6 py-3 rounded-full text-[11px] md:text-[12px] uppercase tracking-[0.4em] text-stone-600 hover:text-stone-900 hover:border-stone-500 transition-all duration-300"
         >
           Take me to the next page
